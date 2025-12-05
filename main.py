@@ -106,10 +106,19 @@ def predict_email(payload: EmailRequest):
 
     label = "phishing" if pred == 1 else "safe"
 
+    # Rule-Based Override
+    # -----------------------------
+    if rule_based_flags(text):
+        pred = 1
+        label = "phishing"
+        phishing_prob = max(phishing_prob, 95.0)
+        safe_prob = 100 - phishing_prob
+
     return PredictionResponse(
         prediction=pred,
         label=label,
         safe_prob=safe_prob,
         phishing_prob=phishing_prob
     )
+
 
