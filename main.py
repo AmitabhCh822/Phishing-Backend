@@ -770,6 +770,18 @@ ACTION_TERMS = [
     "reрly with",
 ]
 
+# ----------------------------------------------------
+# Rule-Based Function for High-Risk Manual Override
+# ----------------------------------------------------
+def rule_based_flags(text: str) -> bool:
+    t = text.lower()
+
+    sensitive_hit = any(term in t for term in SENSITIVE_TERMS)
+    action_hit = any(term in t for term in ACTION_TERMS)
+
+    # If the email BOTH requests an action AND mentions sensitive info → 100% phishing
+    return sensitive_hit and action_hit
+    
 # ======================================================
 # MODEL LOAD
 # ======================================================
@@ -875,5 +887,6 @@ def predict_email(payload: EmailRequest):
         return PredictionResponse(-1, "suspicious", safe_prob, phishing_prob)
     else:
         return PredictionResponse(0, "safe", safe_prob, phishing_prob)
+
 
 
