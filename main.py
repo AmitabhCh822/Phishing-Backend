@@ -4,6 +4,17 @@ from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
 
+SENSITIVE_TERMS = ["passport", "ssn", "social security", "id card", "bank account",
+                   "routing number", "credit card", "password", "login", "credentials"]
+
+ACTION_TERMS = ["send", "provide", "reply with", "upload", "share"]
+
+def rule_based_flags(text):
+    t = text.lower()
+    sensitive = any(w in t for w in SENSITIVE_TERMS)
+    action = any(w in t for w in ACTION_TERMS)
+    return sensitive and action
+
 # -----------------------------
 # Load model + vectorizer
 # -----------------------------
@@ -101,3 +112,4 @@ def predict_email(payload: EmailRequest):
         safe_prob=safe_prob,
         phishing_prob=phishing_prob
     )
+
