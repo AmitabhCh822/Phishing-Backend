@@ -154,49 +154,72 @@ def predict_email(payload: EmailRequest):
             phishing_prob=0.0
         )
 
-    # Vectorize
+    # Vectorize text
     X = vectorizer.transform([text])
 
-    # ML Prediction
+    # Predict
     pred_raw = model.predict(X)[0]
     probabilities = model.predict_proba(X)[0]
 
-    pred = 1 if pred_raw == PHISHING_LABEL else 0
-
-    safe_prob = round(float(probabilities[SAFE_INDEX] * 100), 2)
-    phishing_prob = round(float(probabilities[PHISHING_INDEX] * 100), 2)
-
-    ml_label = "phishing" if pred == 1 else "safe"
+    # Extract probabilities
+    safe_prob = float(probabilities[SAFE_INDEX] * 100)
+    phishing_prob = float(probabilities[PHISHING_INDEX] * 100)
 
     # -----------------------------
-    # RULE-BASED SCORING
+    # RULE-BASED FLAGS
     # -----------------------------
-    score = phishing_score(text)
-    rule_label = classify_risk(score)
+    t = text.lower()
 
-    # -----------------------------
-    # Hybrid Decision Logic
-    # -----------------------------
-    # If rules detect phishing → phishing
-    if rule_label == "phishing":
-        final_label = "phishing"
-        pred = 1
-        phishing_prob = max(phishing_prob, 95.0)
+    sensitive = any(w in t for w in SENSITIVE_TERMS)
+    action = any(w in t for w in ACTION_TERMS)
+
+    mild_suspicious_terms = [
+        "confirm your information",
+        "verify your details",
+        "review your account",
+        "we noticed unusual activity",
+        "asap",
+        "immediately",
+        "renew your"
+    ]
+
+    mild_flag = any(w in t for w in mild_suspicious_terms)
+
+    # Strong phishing rule
+    if sensitive and action:
+        label = "phishing"
+        phishing_prob = max(phishing_prob, 85.0)
         safe_prob = 100 - phishing_prob
+        return PredictionResponse(
+            prediction=1,
+            label=label,
+            safe_prob=round(safe_prob, 2),
+            phishing_prob=round(phishing_prob, 2)
+        )
 
-    # If rules detect suspicious → override ML safe
-    elif rule_label == "suspicious" and ml_label == "safe":
-        final_label = "suspicious"
-        pred = 1  # treat suspicious as risk
-        phishing_prob = max(phishing_prob, 60.0)
-        safe_prob = 100 - phishing_prob
+    # Mild suspicious rule
+    if mild_flag:
+        # Push into suspicious range artificially
+        if phishing_prob < 40:
+            phishing_prob = 50.0
+            safe_prob = 50.0
 
+    # -----------------------------
+    # ML + RULE-BASED RISK TIERS
+    # -----------------------------
+    if phishing_prob >= 80:
+        label = "phishing"
+        prediction = 1
+    elif phishing_prob >= 40:
+        label = "suspicious"
+        prediction = -1  # special code for UI if you want
     else:
-        final_label = ml_label  # ML wins if rules say safe
+        label = "safe"
+        prediction = 0
 
     return PredictionResponse(
-        prediction=pred,
-        label=final_label,
-        safe_prob=safe_prob,
-        phishing_prob=phishing_prob
+        prediction=prediction,
+        label=label,
+        safe_prob=round(safe_prob, 2),
+        phishing_prob=round(phishing_prob, 2)
     )
