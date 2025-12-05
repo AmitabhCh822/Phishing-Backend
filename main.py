@@ -848,45 +848,89 @@ def predict_email(payload: EmailRequest):
     text = payload.email.strip()
 
     if not text:
-        return PredictionResponse(prediction=0, label="safe", safe_prob=100.0, phishing_prob=0.0)
+        return PredictionResponse(
+            prediction=0,
+            label="safe",
+            safe_prob=100.0,
+            phishing_prob=0.0
+        )
 
-    # ML prediction
+    # ================================
+    # 1) ML Prediction
+    # ================================
     X = vectorizer.transform([text])
     probs = model.predict_proba(X)[0]
+
     ml_safe = float(probs[SAFE_INDEX] * 100)
     ml_phish = float(probs[PHISHING_INDEX] * 100)
 
     safe_prob = ml_safe
     phishing_prob = ml_phish
 
+    # ================================
+    # 2) Manual Dictionary Score
+    # ================================
     manual_score = compute_manual_score(text)
 
-    # 1) Hard override
+    # ================================
+    # 3) Hard Rule-Based Override
+    # Sensitive term + Action → 100% phishing
+    # ================================
     if rule_based_flags(text):
-        return PredictionResponse(prediction=1, label="phishing", safe_prob=5.0, phishing_prob=95.0)
+        return PredictionResponse(
+            prediction=1,
+            label="phishing",
+            safe_prob=5.0,
+            phishing_prob=95.0
+        )
 
-    # 2) High risk dictionary (score ≥12) → PHISHING
+    # ================================
+    # 4) Extreme Dictionary Risk
+    # manual_score ≥ 12 → PHISHING
+    # ================================
     if manual_score >= 12:
         phishing_prob = 85.0
         safe_prob = 15.0
 
-    # 3) Medium risk dictionary (7–11) → SUSPICIOUS
+    # ================================
+    # 5) Moderate Dictionary Risk
+    # manual_score 7–11 → SUSPICIOUS
+    # ================================
     elif 7 <= manual_score <= 11 and phishing_prob < 70:
         phishing_prob = 65.0
         safe_prob = 35.0
 
-    # 4) Mild risk dictionary (3–6) → possible upgrade
+    # ================================
+    # 6) Mild Dictionary Risk Upgrade
+    # manual_score 3–6 → 50/50 band
+    # ================================
     elif 3 <= manual_score <= 6 and phishing_prob < 60:
         phishing_prob = 50.0
         safe_prob = 50.0
 
-    # Final label assignment
+    # ================================
+    # 7) Final Label Assignment
+    # ================================
     if phishing_prob >= 80:
-        return PredictionResponse(1, "phishing", safe_prob, phishing_prob)
+        return PredictionResponse(
+            prediction=1,
+            label="phishing",
+            safe_prob=safe_prob,
+            phishing_prob=phishing_prob
+        )
+
     elif phishing_prob >= 40:
-        return PredictionResponse(-1, "suspicious", safe_prob, phishing_prob)
+        return PredictionResponse(
+            prediction=-1,
+            label="suspicious",
+            safe_prob=safe_prob,
+            phishing_prob=phishing_prob
+        )
+
     else:
-        return PredictionResponse(0, "safe", safe_prob, phishing_prob)
-
-
-
+        return PredictionResponse(
+            prediction=0,
+            label="safe",
+            safe_prob=safe_prob,
+            phishing_prob=phishing_prob
+        )
