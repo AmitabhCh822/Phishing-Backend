@@ -3,7 +3,115 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
-from phishing import HIGH_RISK, MEDIUM_RISK, LOW_RISK   # your scoring dictionaries
+
+HIGH_RISK = [
+    # financial + identity
+    "bank account",
+    "account number",
+    "social security",
+    "ssn",
+    "credit card",
+    "routing number",
+    "debit card",
+    "security code",
+    "cvv",
+    "pin number",
+    "identity verification",
+    "id card",
+    "photo id",
+    "driver's license",
+
+    # credential harvesting
+    "password",
+    "login now",
+    "login to continue",
+    "reset your password",
+    "confirm your password",
+    "verify immediately",
+    "your account has been suspended",
+    "your account will be closed",
+    "security alert",
+    "unusual activity detected",
+
+    # money movement
+    "wire transfer",
+    "direct deposit update",
+    "payment overdue",
+    "billing issue",
+    "account compromised",
+
+    # emergency social engineering
+    "urgent action required",
+    "immediately",
+    "within 24 hours",
+    "final notice",
+    "your access will be revoked",
+]
+
+MEDIUM_RISK = [
+    # account maintenance phrases
+    "verify your account",
+    "update your information",
+    "update your details",
+    "renew your pass",
+    "renew your permit",
+    "renew your subscription",
+    "confirm your details",
+    "review your account",
+    "validate your account",
+    "reactivate your account",
+    "your information needs updating",
+
+    # mild urgency but not aggressive
+    "as soon as possible",
+    "attention required",
+    "pending verification",
+    "account review needed",
+    "incomplete application",
+
+    # common in phishing, sometimes legit
+    "document attached",
+    "download the form",
+    "fill out the form",
+    "attached invoice",
+    "invoice pending",
+    "billing update",
+
+    # link manipulation phrases
+    "log in to view",
+    "access your account here",
+    "update required",
+    "review document",
+    "shared a document with you",
+]
+
+LOW_RISK = [
+    # general actions
+    "click",
+    "click here",
+    "sign in",
+    "follow the link",
+    "access your account",
+    "review this",
+    "check the link",
+    "learn more",
+    "view message",
+
+    # neutral email behaviors that can appear in phishing
+    "view your statement",
+    "see attached",
+    "your monthly report",
+    "your receipt",
+    "confirm below",
+    "continue here",
+
+    # cloud service phrases (neutral but sometimes used in attacks)
+    "sharepoint link",
+    "onedrive link",
+    "google drive link",
+    "document is available",
+    "your file is ready",
+]
 
 # ----------------------------------------------------
 # Keyword Lists For Rule-Based Flags
@@ -188,3 +296,4 @@ def predict_email(payload: EmailRequest):
         safe_prob=round(safe_prob, 2),
         phishing_prob=round(phishing_prob, 2)
     )
+
