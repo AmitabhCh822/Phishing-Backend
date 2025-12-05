@@ -3,90 +3,40 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import joblib
 import numpy as np
-import re
+from phishing import HIGH_RISK, MEDIUM_RISK, LOW_RISK   # your scoring dictionaries
 
-# -----------------------------
-# RULE-BASED PHISHING SCORING SYSTEM
-# -----------------------------
+# ----------------------------------------------------
+# Keyword Lists For Rule-Based Flags
+# ----------------------------------------------------
+SENSITIVE_TERMS = [
+    "passport", "ssn", "social security", "id card",
+    "bank account", "routing number", "credit card",
+    "password", "login", "credentials"
+]
 
-HIGH_RISK = {
-    "passport": 6,
-    "ssn": 6,
-    "social security": 6,
-    "bank account": 6,
-    "routing number": 6,
-    "credit card": 6,
-    "password": 6,
-    "verify your identity": 5,
-}
+ACTION_TERMS = [
+    "send", "provide", "reply with", "upload", "share"
+]
 
-MEDIUM_RISK = {
-    "renew your pass": 3,
-    "renew your permit": 3,
-    "renew now": 3,
-    "verify your account": 3,
-    "update your information": 3,
-    "login to continue": 3,
-    "sign in and renew": 3,
-}
-
-LOW_RISK = {
-    "asap": 1,
-    "immediately": 1,
-    "urgent": 1,
-    "action required": 1,
-    "right away": 1,
-}
-
-SENDER_RISK_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com"]
-NON_UC_LINK_SCORE = 4
+# ----------------------------------------------------
+# Rule-Based Function for High-Risk Manual Override
+# ----------------------------------------------------
+def rule_based_flags(text: str) -> bool:
+    t = text.lower()
+    sensitive = any(w in t for w in SENSITIVE_TERMS)
+    action = any(w in t for w in ACTION_TERMS)
+    return sensitive and action
 
 
-def phishing_score(text):
-    text = text.lower()
-    score = 0
-
-    # HIGH RISK
-    for phrase, pts in HIGH_RISK.items():
-        if phrase in text:
-            score += pts
-
-    # MEDIUM RISK
-    for phrase, pts in MEDIUM_RISK.items():
-        if phrase in text:
-            score += pts
-
-    # LOW RISK
-    for phrase, pts in LOW_RISK.items():
-        if phrase in text:
-            score += pts
-
-    # URL CHECK
-    urls = re.findall(r'https?://[^\s]+', text)
-    for url in urls:
-        if not url.endswith(".uc.edu"):
-            score += NON_UC_LINK_SCORE
-
-    return score
-
-
-def classify_risk(score):
-    if score >= 6:
-        return "phishing"
-    elif score >= 3:
-        return "suspicious"
-    else:
-        return "safe"
-
-
-# -----------------------------
+# ----------------------------------------------------
 # Load ML Model + Vectorizer
-# -----------------------------
+# ----------------------------------------------------
 model = joblib.load("model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
 
 MODEL_CLASSES = list(model.classes_)
 
+# Normalize model class labels
 if MODEL_CLASSES == [0, 1] or MODEL_CLASSES == [1, 0]:
     SAFE_LABEL = 0
     PHISHING_LABEL = 1
@@ -94,18 +44,18 @@ elif "safe" in MODEL_CLASSES and "phishing" in MODEL_CLASSES:
     SAFE_LABEL = "safe"
     PHISHING_LABEL = "phishing"
 else:
-    raise ValueError("Model classes must be either [0,1] or ['safe','phishing'].")
+    raise ValueError("Model classes must be [0,1] or ['safe','phishing'].")
 
 SAFE_INDEX = MODEL_CLASSES.index(SAFE_LABEL)
 PHISHING_INDEX = MODEL_CLASSES.index(PHISHING_LABEL)
 
 
-# -----------------------------
-# FastAPI App Setup
-# -----------------------------
+# ----------------------------------------------------
+# FastAPI App
+# ----------------------------------------------------
 app = FastAPI(
     title="Phishing Email Detector API",
-    description="Hybrid ML + Rule-Based Phishing Classifier",
+    description="Hybrid ML + Rule-based phishing detector",
     version="2.0.0"
 )
 
@@ -118,32 +68,58 @@ app.add_middleware(
 )
 
 
-# -----------------------------
-# Request + Response Models
-# -----------------------------
+# ----------------------------------------------------
+# API Request & Response Models
+# ----------------------------------------------------
 class EmailRequest(BaseModel):
     email: str
 
 class PredictionResponse(BaseModel):
-    prediction: int
-    label: str
-    safe_prob: float
-    phishing_prob: float
+    prediction: int      # 0 = safe, -1 = suspicious, 1 = phishing
+    label: str           # "safe", "suspicious", "phishing"
+    safe_prob: float     # % confidence safe
+    phishing_prob: float # % confidence phishing
 
 
-# -----------------------------
+# ----------------------------------------------------
 # Root Endpoint
-# -----------------------------
+# ----------------------------------------------------
 @app.get("/")
 def root():
-    return {"message": "Phishing detector API is running!", "docs": "/docs"}
+    return {"message": "Phishing detector API running", "docs": "/docs"}
 
 
-# -----------------------------
-# PREDICTION ENDPOINT
-# -----------------------------
+# ----------------------------------------------------
+# Hybrid Scoring Logic
+# ----------------------------------------------------
+def compute_manual_score(text: str) -> int:
+    t = text.lower()
+    score = 0
+
+    # HIGH RISK TERMS → +4 each
+    for term in HIGH_RISK:
+        if term in t:
+            score += 4
+
+    # MEDIUM RISK TERMS → +3 each
+    for term in MEDIUM_RISK:
+        if term in t:
+            score += 3
+
+    # LOW RISK TERMS → +1 each
+    for term in LOW_RISK:
+        if term in t:
+            score += 1
+
+    return score
+
+
+# ----------------------------------------------------
+# ML + Rules + Scoring Prediction Endpoint
+# ----------------------------------------------------
 @app.post("/predict", response_model=PredictionResponse)
 def predict_email(payload: EmailRequest):
+
     text = payload.email.strip()
 
     if not text:
@@ -154,65 +130,54 @@ def predict_email(payload: EmailRequest):
             phishing_prob=0.0
         )
 
-    # Vectorize text
+    # Vectorize for ML model
     X = vectorizer.transform([text])
+    ml_label_raw = model.predict(X)[0]
+    probs = model.predict_proba(X)[0]
 
-    # Predict
-    pred_raw = model.predict(X)[0]
-    probabilities = model.predict_proba(X)[0]
+    ml_safe_prob = float(probs[SAFE_INDEX] * 100)
+    ml_phishing_prob = float(probs[PHISHING_INDEX] * 100)
 
-    # Extract probabilities
-    safe_prob = float(probabilities[SAFE_INDEX] * 100)
-    phishing_prob = float(probabilities[PHISHING_INDEX] * 100)
+    # ----------------------------------------------------
+    # Manual Scoring
+    # ----------------------------------------------------
+    manual_score = compute_manual_score(text)
 
-    # -----------------------------
-    # RULE-BASED FLAGS
-    # -----------------------------
-    t = text.lower()
+    # ----------------------------------------------------
+    # Combine ML + Rule-based overrides
+    # ----------------------------------------------------
 
-    sensitive = any(w in t for w in SENSITIVE_TERMS)
-    action = any(w in t for w in ACTION_TERMS)
-
-    mild_suspicious_terms = [
-        "confirm your information",
-        "verify your details",
-        "review your account",
-        "we noticed unusual activity",
-        "asap",
-        "immediately",
-        "renew your"
-    ]
-
-    mild_flag = any(w in t for w in mild_suspicious_terms)
-
-    # Strong phishing rule
-    if sensitive and action:
+    # HARD OVERRIDE: extremely dangerous pattern
+    if rule_based_flags(text):
+        phishing_prob = 95.0
+        safe_prob = 5.0
         label = "phishing"
-        phishing_prob = max(phishing_prob, 85.0)
-        safe_prob = 100 - phishing_prob
+        prediction = 1
         return PredictionResponse(
-            prediction=1,
+            prediction=prediction,
             label=label,
-            safe_prob=round(safe_prob, 2),
-            phishing_prob=round(phishing_prob, 2)
+            safe_prob=safe_prob,
+            phishing_prob=phishing_prob
         )
 
-    # Mild suspicious rule
-    if mild_flag:
-        # Push into suspicious range artificially
-        if phishing_prob < 40:
-            phishing_prob = 50.0
-            safe_prob = 50.0
+    # START WITH ML PROBABILITIES
+    phishing_prob = ml_phishing_prob
+    safe_prob = ml_safe_prob
 
-    # -----------------------------
-    # ML + RULE-BASED RISK TIERS
-    # -----------------------------
+    # MEDIUM SUSPICIOUS RANGE (manual score influence)
+    if 3 <= manual_score <= 6 and phishing_prob < 60:
+        phishing_prob = 50.0
+        safe_prob = 50.0
+
+    # FINAL LABEL DECISION
     if phishing_prob >= 80:
         label = "phishing"
         prediction = 1
+
     elif phishing_prob >= 40:
         label = "suspicious"
-        prediction = -1  # special code for UI if you want
+        prediction = -1
+
     else:
         label = "safe"
         prediction = 0
