@@ -222,6 +222,106 @@ HIGH_RISK = [
     "confіrm",
     "lоgin",
     "аccount",    # Cyrillic 'a'
+
+    # Urgency
+    "sign in now",
+    "urgent renewal",
+    "your spot will be reassigned",
+
+    # Internal IT
+    "vpn access expired",
+    "vpn password reset",
+    "vpn credentials",
+    "your email has been deactivated",
+    "your mailbox settings were changed",
+    "your email will be disabled",
+    "update your vpn configuration",
+    "reset your single sign on",
+    "sso reset required",
+    "your company portal login failed",
+    "company portal access issue",
+
+    # HR
+    "your payroll account is locked",
+    "salary update required",
+    "your benefits have been suspended",
+    "hr has flagged your account",
+    "direct deposit issue",
+    "update your payroll information immediately",
+
+     # =======================================
+    # INTERNAL IT PHISHING
+    # =======================================
+    "vpn access expired",
+    "vpn password reset",
+    "vpn credentials",
+    "your email has been deactivated",
+    "your email will be disabled",
+    "reset your single sign on",
+    "sso reset required",
+    "company portal login failed",
+    "company portal access issue",
+    "your mailbox settings were changed",
+
+    # =======================================
+    # HR / PAYROLL FRAUD
+    # =======================================
+    "payroll account is locked",
+    "salary update required",
+    "benefits have been suspended",
+    "has flagged your account",
+    "direct deposit issue",
+    "update your payroll information immediately",
+
+    # =======================================
+    # CLOUD PLATFORM PHISHING (AWS / Azure / GCP / GitHub)
+    # =======================================
+    "aws account suspended",
+    "aws root access alert",
+    "azure sign in alert",
+    "gcp project suspension",
+    "billing account suspended",
+    "your api key has been exposed",
+    "rotate your access key",
+
+    # =======================================
+    # MESSAGING APP SCAMS
+    # =======================================
+    "contact me on telegram immediately",
+    "whatsapp me urgently",
+    "send your info via whatsapp",
+    "continue the conversation on telegram",
+    "urgent teams message",
+
+    # =======================================
+    # DELIVERY / SHIPPING SCAMS
+    # =======================================
+    "customs clearance fee",
+    "pay import tax",
+    "package cannot be delivered",
+    "shipment on hold",
+
+    # =======================================
+    # UTILITY / PHONE DISCONNECTION
+    # =======================================
+    "your electricity will be disconnected",
+    "utility bill overdue",
+    "water service interruption",
+    "your phone service will be suspended",
+    "internet service termination notice",
+
+    # =======================================
+    # FAKE MEETING INVITES (dangerous)
+    # =======================================
+    "download meeting file",
+
+    # =======================================
+    # SUBSCRIPTION PAYMENT SCAMS
+    # =======================================
+    "your subscription will auto-renew for",
+    "unexpected charge",
+    "your payment method was rejected",
+    "failed payment for your subscription",
 ]
 
 MEDIUM_RISK = [
@@ -418,6 +518,106 @@ MEDIUM_RISK = [
     "updаte your information",
     "verіfy your email",
     "actіon may be required",
+    
+    # UNIVERSITY PARKING / ADMIN PHISHING LANGUAGE
+    "renew your pass",
+    "renew your parking permit",
+    "parking permit renewal",
+    "parking pass renewal",
+    "sign in to renew",
+    "your permit is pending",
+    "your parking is pending",
+    "your spot may be reassigned",
+    "high volume of incoming students",
+    "renew now",
+    "renew asap",
+    "update your permit",
+    "update your parking information",
+
+    # Internal IT
+    "it support team",
+    "system upgrade notification",
+    "manual account verification required",
+    "security settings require review",
+    "unexpected logout",
+
+    # HR
+    "open enrollment update",
+    "benefits information needs review",
+    "hr notice",
+    "employment verification update",
+
+    # =======================================
+    # UNIVERSITY / PARKING PHISHING
+    # =======================================
+    "renew your pass",
+    "renew your parking permit",
+    "parking permit renewal",
+    "parking pass renewal",
+    "sign in to renew",
+    "your permit is pending",
+    "your parking is pending",
+    "renew your pass asap",
+    "update your parking information",
+    "high volume of incoming students",
+
+    # =======================================
+    # INTERNAL IT SOFT WARNINGS
+    # =======================================
+    "it support team",
+    "manual account verification required",
+    "security settings require review",
+    "unexpected logout",
+    "system upgrade notification",
+
+    # =======================================
+    # HR / PAYROLL MEDIUM RISK
+    # =======================================
+    "open enrollment update",
+    "benefits information needs review",
+    "hr notice",
+    "employment verification update",
+
+    # =======================================
+    # CLOUD PLATFORM MEDIUM RISK
+    # =======================================
+    "please verify your cloud billing",
+    "cloud console access issue",
+    "your deployment failed",
+    "github login issue",
+    "github security alert",
+
+    # =======================================
+    # MESSAGING APP MEDIUM RISK
+    # =======================================
+    "teams link update",
+    "follow up on teams message",
+
+    # =======================================
+    # DELIVERY / SHIPPING MEDIUM RISK
+    # =======================================
+    "address verification needed",
+    "delivery confirmation",
+
+    # =======================================
+    # UTILITY / BILLING MEDIUM RISK
+    # =======================================
+    "billing statement available",
+    "account update required for your service provider",
+
+    # =======================================
+    # MEETING INVITES (non-urgent)
+    # =======================================
+    "meeting link updated",
+    "calendar invite changed",
+    "join updated meeting link",
+    "your meeting access is restricted",
+
+    # =======================================
+    # SUBSCRIPTION / BILLING
+    # =======================================
+    "renew your subscription",
+    "verify your billing details",   
 ]
 
 
@@ -1013,5 +1213,6 @@ def predict_email(payload: EmailRequest):
         safe_prob=round(safe_prob, 2),
         phishing_prob=round(phishing_prob, 2)
     )
+
 
 
