@@ -771,35 +771,36 @@ ACTION_TERMS = [
 ]
 
 # ----------------------------------------------------
-# Rule-Based Function for High-Risk Manual Override
+# RULE: Sensitive-term + Action-term = ALWAYS PHISHING
 # ----------------------------------------------------
-def rule_based_flags(text: str) -> bool:
-    t = text.lower()
+def rule_based_flags(t: str) -> bool:
+    return any(term in t for term in SENSITIVE_TERMS) and any(term in t for term in ACTION_TERMS)
 
-    sensitive_hit = any(term in t for term in SENSITIVE_TERMS)
-    action_hit = any(term in t for term in ACTION_TERMS)
 
-    # If the email BOTH requests an action AND mentions sensitive info → 100% phishing
-    return sensitive_hit and action_hit
-    
-# ======================================================
+# ----------------------------------------------------
 # MODEL LOAD
-# ======================================================
+# ----------------------------------------------------
 model = joblib.load("model.pkl")
 vectorizer = joblib.load("vectorizer.pkl")
 
 MODEL_CLASSES = list(model.classes_)
-SAFE_INDEX = MODEL_CLASSES.index(0 if 0 in MODEL_CLASSES else "safe")
-PHISHING_INDEX = MODEL_CLASSES.index(1 if 1 in MODEL_CLASSES else "phishing")
+
+# Bulletproof class indexing
+if isinstance(MODEL_CLASSES[0], str):
+    SAFE_INDEX = MODEL_CLASSES.index("safe")
+    PHISHING_INDEX = MODEL_CLASSES.index("phishing")
+else:
+    SAFE_INDEX = MODEL_CLASSES.index(0)
+    PHISHING_INDEX = MODEL_CLASSES.index(1)
 
 
-# ======================================================
-# FASTAPI SETUP
-# ======================================================
+# ----------------------------------------------------
+# FASTAPI CONFIG
+# ----------------------------------------------------
 app = FastAPI(
     title="Phishing Email Detector API",
     description="Hybrid ML + Rule-based phishing detector",
-    version="3.0.0"
+    version="3.1.0"
 )
 
 app.add_middleware(
@@ -811,6 +812,9 @@ app.add_middleware(
 )
 
 
+# ----------------------------------------------------
+# REQUEST / RESPONSE MODELS
+# ----------------------------------------------------
 class EmailRequest(BaseModel):
     email: str
 
@@ -821,31 +825,31 @@ class PredictionResponse(BaseModel):
     phishing_prob: float
 
 
-# ======================================================
-# MANUAL SCORING
-# ======================================================
+# ----------------------------------------------------
+# MANUAL SCORING (weights: high=3, med=2, low=1)
+# ----------------------------------------------------
 def compute_manual_score(t: str) -> int:
-    t = t.lower()
     score = 0
     for w in HIGH_RISK:
         if w in t:
-            score += 4
+            score += 3
     for w in MEDIUM_RISK:
         if w in t:
-            score += 3
+            score += 2
     for w in LOW_RISK:
         if w in t:
             score += 1
     return score
 
 
-# ======================================================
-# PREDICTION ENDPOINT — CLEANED & FIXED
-# ======================================================
+# ----------------------------------------------------
+# PATCHED /predict ENDPOINT (FINAL VERSION)
+# ----------------------------------------------------
 @app.post("/predict", response_model=PredictionResponse)
 def predict_email(payload: EmailRequest):
 
     text = payload.email.strip()
+    t = text.lower()
 
     if not text:
         return PredictionResponse(
@@ -855,9 +859,9 @@ def predict_email(payload: EmailRequest):
             phishing_prob=0.0
         )
 
-    # ================================
-    # 1) ML Prediction
-    # ================================
+    # =====================================================
+    # 1) ML PREDICTION
+    # =====================================================
     X = vectorizer.transform([text])
     probs = model.predict_proba(X)[0]
 
@@ -867,65 +871,86 @@ def predict_email(payload: EmailRequest):
     safe_prob = ml_safe
     phishing_prob = ml_phish
 
-    # ================================
-    # 2) Manual Dictionary Score
-    # ================================
-    manual_score = compute_manual_score(text)
+    # =====================================================
+    # 2) MANUAL DICTIONARY SCORE
+    # =====================================================
+    manual_score = compute_manual_score(t)
 
-    # ================================
-    # 3) Hard Rule-Based Override
-    # Sensitive term + Action → 100% phishing
-    # ================================
-    if rule_based_flags(text):
-        phishing_prob = max(phishing_prob, 70.0)   # suspicious or high phishing
-
-    # ================================
-    # 4) Extreme Dictionary Risk
-    # manual_score ≥ 12 → PHISHING
-    # ================================
-    if manual_score >= 12 and phishing_prob < 90:
-        phishing_prob = 75.0
-        safe_prob = 25.0
-
-    # ================================
-    # 5) Moderate Dictionary Risk
-    # manual_score 7–11 → SUSPICIOUS
-    # ================================
-    elif 7 <= manual_score <= 11 and phishing_prob < 70:
-            phishing_prob = 50.0
-
-    # ================================
-    # 6) Mild Dictionary Risk Upgrade
-    # manual_score 3–6 → 50/50 band
-    # ================================
-    elif 3 <= manual_score <= 6 and phishing_prob < 60:
-        phishing_prob = 50.0
-        safe_prob = 50.0
-
-    # ================================
-    # 7) Final Label Assignment
-    # ================================
-    if phishing_prob >= 90:
+    # =====================================================
+    # 3) HARD OVERRIDE → Sensitive + Action = PHISHING
+    # =====================================================
+    if rule_based_flags(t):
         return PredictionResponse(
             prediction=1,
             label="phishing",
-            safe_prob=safe_prob,
-            phishing_prob=phishing_prob
+            safe_prob=5.0,
+            phishing_prob=95.0
         )
 
-    elif phishing_prob >= 40:
+    # =====================================================
+    # 4) SPECIAL CASE: Mailbox / storage quota → ALWAYS suspicious
+    # =====================================================
+    mild_storage_terms = [
+        "mailbox storage is almost full",
+        "your mailbox is almost full",
+        "mailbox storage full",
+        "storage is almost full",
+        "increase your quota",
+        "quota limit",
+        "quota warning"
+    ]
+
+    if any(term in t for term in mild_storage_terms):
+        phishing_prob = min(phishing_prob, 60.0)
+        safe_prob = 100 - phishing_prob
+
+    # =====================================================
+    # 5) EXTREME DICTIONARY RISK (new threshold = 9)
+    # =====================================================
+    if manual_score >= 9:
+        phishing_prob = max(phishing_prob, 85.0)
+        safe_prob = 100 - phishing_prob
+
+    # =====================================================
+    # 6) MODERATE RISK (new range = 5–8)
+    # =====================================================
+    elif 5 <= manual_score <= 8:
+        phishing_prob = max(phishing_prob, 60.0)
+        safe_prob = 40.0
+
+    # =====================================================
+    # 7) MILD RISK (new range = 3–4)
+    # =====================================================
+    elif 3 <= manual_score <= 4:
+        phishing_prob = max(phishing_prob, 45.0)
+        safe_prob = 55.0
+
+    # =====================================================
+    # 8) FINAL LABEL ASSIGNMENT
+    # =====================================================
+    # Phishing
+    if phishing_prob >= 80:
+        return PredictionResponse(
+            prediction=1,
+            label="phishing",
+            safe_prob=round(safe_prob, 2),
+            phishing_prob=round(phishing_prob, 2)
+        )
+
+    # Suspicious
+    if 40 <= phishing_prob < 80:
         return PredictionResponse(
             prediction=-1,
             label="suspicious",
-            safe_prob=safe_prob,
-            phishing_prob=phishing_prob
+            safe_prob=round(safe_prob, 2),
+            phishing_prob=round(phishing_prob, 2)
         )
 
-    else:
-        return PredictionResponse(
-            prediction=0,
-            label="safe",
-            safe_prob=safe_prob,
-            phishing_prob=phishing_prob
-        )
+    # Safe
+    return PredictionResponse(
+        prediction=0,
+        label="safe",
+        safe_prob=round(safe_prob, 2),
+        phishing_prob=round(phishing_prob, 2)
+    )
 
