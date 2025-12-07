@@ -877,28 +877,22 @@ def predict_email(payload: EmailRequest):
     # Sensitive term + Action → 100% phishing
     # ================================
     if rule_based_flags(text):
-        return PredictionResponse(
-            prediction=1,
-            label="phishing",
-            safe_prob=5.0,
-            phishing_prob=95.0
-        )
+        phishing_prob = max(phishing_prob, 70.0)   # suspicious or high phishing
 
     # ================================
     # 4) Extreme Dictionary Risk
     # manual_score ≥ 12 → PHISHING
     # ================================
-    if manual_score >= 12:
-        phishing_prob = 85.0
-        safe_prob = 15.0
+    if manual_score >= 12 and phishing_prob < 90:
+        phishing_prob = 75.0
+        safe_prob = 25.0
 
     # ================================
     # 5) Moderate Dictionary Risk
     # manual_score 7–11 → SUSPICIOUS
     # ================================
     elif 7 <= manual_score <= 11 and phishing_prob < 70:
-        phishing_prob = 65.0
-        safe_prob = 35.0
+            phishing_prob = 50.0
 
     # ================================
     # 6) Mild Dictionary Risk Upgrade
@@ -911,7 +905,7 @@ def predict_email(payload: EmailRequest):
     # ================================
     # 7) Final Label Assignment
     # ================================
-    if phishing_prob >= 80:
+    if phishing_prob >= 90:
         return PredictionResponse(
             prediction=1,
             label="phishing",
@@ -934,3 +928,4 @@ def predict_email(payload: EmailRequest):
             safe_prob=safe_prob,
             phishing_prob=phishing_prob
         )
+
