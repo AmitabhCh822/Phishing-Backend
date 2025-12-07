@@ -630,6 +630,55 @@ LOW_RISK = [
     "lоg details attached",  # Cyrillic o
 ]
 
+PREDATORY_JOURNAL_TERMS = [
+    # Common predatory recruitment patterns
+    "submit your manuscript",
+    "submit manuscript",
+    "submit your paper",
+    "send your manuscript",
+    "send your paper",
+    "call for papers",
+    "call for submissions",
+    "call for manuscript submissions",
+    "special issue invitation",
+    "editorial board invitation",
+    "join our editorial board",
+    "we invite you to submit",
+    "we welcome your manuscript",
+    "we noticed your recent publication",
+    
+    # Fake indexing claims
+    "indexed in scopus",
+    "indexed in web of science",
+    "indexed in pubmed",
+    "impact factor",
+    "high impact journal",
+    
+    # APC / publishing fee language
+    "processing charge",
+    "article processing charge",
+    "article processing fee",
+    "apc required",
+    "pay publication fee",
+    "publication fee",
+    "publication charge",
+    
+    # Predatory “fast acceptance” language
+    "rapid publication",
+    "quick publication",
+    "fast-track acceptance",
+    "guaranteed publication",
+    "publication guaranteed",
+    "rapid peer review",
+    "fast peer review",
+    
+    # Scam communication patterns
+    "whatsapp submission",
+    "whatsapp for submission",
+    "send via whatsapp",
+    "publish your research quickly",
+]
+
 # ----------------------------------------------------
 # Keyword Lists For Rule-Based Flags
 # ----------------------------------------------------
@@ -839,6 +888,9 @@ def compute_manual_score(t: str) -> int:
     for w in LOW_RISK:
         if w in t:
             score += 1
+    for w in PREDATORY_JOURNAL_TERMS:
+        if w in t:
+            score += 2   # medium-risk → suspicious
     return score
 
 
@@ -872,6 +924,14 @@ def predict_email(payload: EmailRequest):
     phishing_prob = ml_phish
 
     # =====================================================
+    # SPECIAL CASE: Predatory Journal Emails → SUSPICIOUS
+    # =====================================================
+    if any(term in t for term in PREDATORY_JOURNAL_TERMS):
+        # force into suspicious range
+        phishing_prob = max(phishing_prob, 55.0)
+        safe_prob = 45.0
+        
+    # =====================================================
     # 2) MANUAL DICTIONARY SCORE
     # =====================================================
     manual_score = compute_manual_score(t)
@@ -886,7 +946,7 @@ def predict_email(payload: EmailRequest):
             safe_prob=5.0,
             phishing_prob=95.0
         )
-
+    
     # =====================================================
     # 4) SPECIAL CASE: Mailbox / storage quota → ALWAYS suspicious
     # =====================================================
@@ -953,4 +1013,5 @@ def predict_email(payload: EmailRequest):
         safe_prob=round(safe_prob, 2),
         phishing_prob=round(phishing_prob, 2)
     )
+
 
