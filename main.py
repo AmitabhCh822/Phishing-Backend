@@ -1268,7 +1268,7 @@ def predict_email(payload: EmailRequest):
     if any(term in t for term in PREDATORY_JOURNAL_TERMS):
         # force into suspicious range
         phishing_prob = max(phishing_prob, 55.0)
-        safe_prob = 45.0
+        safe_prob = 100 - phishing_prob
         
     # =====================================================
     # 2) MANUAL DICTIONARY SCORE
@@ -1315,14 +1315,14 @@ def predict_email(payload: EmailRequest):
     # =====================================================
     elif 5 <= manual_score <= 8:
         phishing_prob = max(phishing_prob, 60.0)
-        safe_prob = 40.0
+        safe_prob = 100 - phishing_prob
 
     # =====================================================
     # 7) MILD RISK (new range = 3–4)
     # =====================================================
     elif 3 <= manual_score <= 4:
         phishing_prob = max(phishing_prob, 45.0)
-        safe_prob = 55.0
+        safe_prob = 100 - phishing_prob
 
     # =====================================================
     # 8) FINAL LABEL ASSIGNMENT
